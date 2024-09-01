@@ -1,7 +1,12 @@
 <?php
 
+use App\Http\Integrations\Laradevs\Requests\UpdateDeveloperRequest;
 use Livewire\Volt\Component;
 use Illuminate\Support\Facades\Http;
+use App\Http\Integrations\Laradevs\LaradevsConnector;
+use App\Http\Integrations\Laradevs\Requests\ListDevelopersRequest;
+use App\Http\Integrations\Laradevs\Requests\StoreDeveloperRequest;
+use App\Http\Integrations\Laradevs\Requests\DestroyDeveloperRequest;
 
 new class extends Component {
     /**
@@ -23,11 +28,6 @@ new class extends Component {
      * Show delete form.
      */
     public bool $showDelete = false;
-
-    /**
-     * Api Token.
-     */
-    public string $token = '1|C5T50L7X74rUqP8ZZsqyH2V2JyeOzQrBhxuX0Yb61a3fda90';
 
     /**
      * Create form data.
@@ -64,10 +64,11 @@ new class extends Component {
      */
     public function index(): void
     {
-        $this->developers = Http::withHeader('accept', 'application/json')
-            ->withToken($this->token)
-            ->get('https://laradevs.test/api/v1/developers')
-            ->json();
+        $connector = resolve(LaradevsConnector::class);
+
+        $request = ListDevelopersRequest::make();
+
+        $this->developers = $connector->send($request)->json();
     }
 
     /**
@@ -83,12 +84,11 @@ new class extends Component {
      */
     public function store(): void
     {
-        $response = Http::withHeader('accept', 'application/json')
-            ->withToken($this->token)
-            ->post('https://laradevs.test/api/v1/developers', [
-                'name' => $this->createFormData['name'],
-                'bio' => $this->createFormData['bio'],
-            ]);
+        $connector = resolve(LaradevsConnector::class);
+
+        $request = StoreDeveloperRequest::make($this->createFormData);
+
+        $response = $connector->send($request);
 
         if ($response->successful()) {
             $this->showCreate = false;
@@ -115,12 +115,14 @@ new class extends Component {
      */
     public function update(): void
     {
-        $response = Http::withHeader('accept', 'application/json')
-            ->withToken($this->token)
-            ->put("https://laradevs.test/api/v1/developers/{$this->editFormData['id']}", [
-                'name' => $this->editFormData['name'],
-                'bio' => $this->editFormData['bio'],
-            ]);
+        $connector = resolve(LaradevsConnector::class);
+
+        $request = UpdateDeveloperRequest::make(
+            $this->editFormData['id'],
+            \Illuminate\Support\Arr::only($this->editFormData, ['name', 'bio'])
+        );
+
+        $response = $connector->send($request);
 
         if ($response->successful()) {
             $this->showEdit = false;
@@ -148,9 +150,11 @@ new class extends Component {
      */
     public function destroy(): void
     {
-        $response = Http::withHeader('accept', 'application/json')
-            ->withToken($this->token)
-            ->delete("https://laradevs.test/api/v1/developers/$this->developerId");
+        $connector = resolve(LaradevsConnector::class);
+
+        $request = DestroyDeveloperRequest::make($this->developerId);
+
+        $response = $connector->send($request);
 
         if ($response->successful()) {
             $this->showDelete = false;
@@ -187,7 +191,8 @@ new class extends Component {
                 <table class="min-w-full divide-y divide-gray-700">
                   <thead>
                   <tr>
-                    <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-white sm:pl-0">Name</th>
+                    <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-white sm:pl-0">Name
+                    </th>
                     <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-white">Bio</th>
                     <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-white">Created</th>
                     <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-0">
@@ -210,11 +215,13 @@ new class extends Component {
                         {{ \Illuminate\Support\Carbon::parse($developer['created_at'])->diffForHumans() }}
                       </td>
                       <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
-                        <a href="#" wire:click.prevent="edit({{ $developer['id'] }})" class="text-indigo-400 hover:text-indigo-300">Edit<span
+                        <a href="#" wire:click.prevent="edit({{ $developer['id'] }})"
+                           class="text-indigo-400 hover:text-indigo-300">Edit<span
                             class="sr-only">, {{ $developer['name'] }}</span></a>
                       </td>
                       <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
-                        <a href="#" wire:click.prevent="delete({{ $developer['id'] }})" class="text-red-400 hover:text-red-300">Delete<span
+                        <a href="#" wire:click.prevent="delete({{ $developer['id'] }})"
+                           class="text-red-400 hover:text-red-300">Delete<span
                             class="sr-only">, {{ $developer['name'] }}</span></a>
                       </td>
                     </tr>
@@ -270,7 +277,8 @@ new class extends Component {
                   <div class="sm:col-span-4">
                     <label for="name" class="block text-sm font-medium leading-6 text-white">Name</label>
                     <div class="mt-2">
-                      <div class="flex rounded-md bg-white/5 ring-1 ring-inset ring-white/10 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
+                      <div
+                        class="flex rounded-md bg-white/5 ring-1 ring-inset ring-white/10 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                         <input
                           type="text"
                           name="name"
@@ -301,8 +309,13 @@ new class extends Component {
             </div>
 
             <div class="mt-6 flex items-center justify-end gap-x-6">
-              <button type="button" x-on:click="isOpen = false" class="text-sm font-semibold leading-6 text-white">Cancel</button>
-              <button type="submit" class="rounded-md bg-indigo-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500">Save</button>
+              <button type="button" x-on:click="isOpen = false" class="text-sm font-semibold leading-6 text-white">
+                Cancel
+              </button>
+              <button type="submit"
+                      class="rounded-md bg-indigo-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500">
+                Save
+              </button>
             </div>
           </form>
         </div>
@@ -351,7 +364,8 @@ new class extends Component {
                   <div class="sm:col-span-4">
                     <label for="name" class="block text-sm font-medium leading-6 text-white">Name</label>
                     <div class="mt-2">
-                      <div class="flex rounded-md bg-white/5 ring-1 ring-inset ring-white/10 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
+                      <div
+                        class="flex rounded-md bg-white/5 ring-1 ring-inset ring-white/10 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
                         <input
                           type="text"
                           name="name"
@@ -382,8 +396,13 @@ new class extends Component {
             </div>
 
             <div class="mt-6 flex items-center justify-end gap-x-6">
-              <button type="button" x-on:click="isOpen = false" class="text-sm font-semibold leading-6 text-white">Cancel</button>
-              <button type="submit" class="rounded-md bg-indigo-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500">Save</button>
+              <button type="button" x-on:click="isOpen = false" class="text-sm font-semibold leading-6 text-white">
+                Cancel
+              </button>
+              <button type="submit"
+                      class="rounded-md bg-indigo-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500">
+                Save
+              </button>
             </div>
           </form>
         </div>
@@ -418,17 +437,22 @@ new class extends Component {
         x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
         class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0"
       >
-        <div class="relative transform overflow-hidden rounded-lg bg-gray-900 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+        <div
+          class="relative transform overflow-hidden rounded-lg bg-gray-900 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
           <div class="sm:flex sm:items-start">
-            <div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
-              <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            <div
+              class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+              <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"
+                   aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
               </svg>
             </div>
             <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
               <h3 class="text-base font-semibold leading-6 text-gray-900" id="modal-title">Delete this developer</h3>
               <div class="mt-2">
-                <p class="text-sm text-gray-500">Are you sure you want to delete this developer account? All of your data will be permanently removed from our servers forever. This action cannot be undone.</p>
+                <p class="text-sm text-gray-500">Are you sure you want to delete this developer account? All of your
+                  data will be permanently removed from our servers forever. This action cannot be undone.</p>
               </div>
             </div>
           </div>

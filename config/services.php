@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'laradevs' => [
+        'api_key' => env('LARADEVS_API_KEY'),
+        'api_base_url' => env('LARADEVS_API_BASE_URL'),
+    ],
+
 ];
